@@ -50,7 +50,7 @@ function fetchPRList() {
 
 function createRow(pr) {
   var linksTemplate = _.template(
-    "[<a href='<%= github_pr_url %>/<%= pr_num %>'>conversation</a>]" +
+    "[<a href='<%= github_pr_url %>/<%= pr_num %>'>pr</a>]" +
     "[<a href='<%= github_pr_url %>/<%= pr_num %>/files'>files</a>]" +
     "<% if (jira_id != null) { %>" +
     "[<a href='<%= jira_url %>/<%= jira_id %>'>JIRA</a>]" +
