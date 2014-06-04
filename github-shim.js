@@ -30,14 +30,14 @@ $(document).ready(function() {
   });
   _.each(prKeys, function(k) { localStorage.removeItem(k); });
 
+  $("#github-token-input").change(function(event) {
+    localStorage[GITHUB_API_TOKEN] = $(event.target).val();
+    fetchPRList();
+  });
+
   if (localStorage[GITHUB_API_TOKEN]) {
     $("#github-token-input").val(localStorage[GITHUB_API_TOKEN])
     fetchPRList();
-  } else {
-    $("#github-token-input").change(function(event) {
-      localStorage[GITHUB_API_TOKEN] = $(event.target).val();
-      fetchPRList();
-    });
   }
 });
 
@@ -109,7 +109,11 @@ function addPRToTable(json) {
   }
   else if (json.title.search(/GRAPHX/i) >= 0) {
     $("#graphx-table").append(createRow(json));
-  } else if (json.title.search(/STREAMING/i) >= 0) {
+  }
+  else if (json.title.search(/YARN/i) >= 0) {
+    $("#yarn-table").append(createRow(json));
+  }
+  else if (json.title.search(/STREAMING/i) >= 0) {
     $("#streaming-table").append(createRow(json));
   } else {
     $("#core-table").append(createRow(json));
