@@ -10,3 +10,12 @@
   padding-bottom: 3px;
   padding-top: 3px;
 }
+
+.token-display {
+  color: grey;
+}
+
+.token-input {
+  color: grey;
+  width: 330px;
+}

@@ -10,16 +10,35 @@ var rowTemplate = _.template(
   "<tr>" +
     "<td><%= links %></td>" +
     "<td><%= pr.title %></td>" +
-    "<td><%= pr.user.login %></td>" +
+    "<td><%= pr.userLogin %></td>" +
     "<td sorttable_customkey='<%= updated_stamp %>'><%= updated_str %></td>" +
   "</tr>");
 
-var gitApiToken = "d273f68038f65e248c87c26bebb910e1eba74a2b"
+// Key prefixes used in local storage
+var PR_SUMMARY_PREFIX = "pr_summary_"
+var PR_DETAIL_PREFIX = "pr_detail_"
+var JIRA_DETAIL_PREFIX = "jira_detail_"
+var GITHUB_API_TOKEN = "github_token"
 
 $(document).ready(function() {
+  // Prep tables
   _.each($("table"), function(t) { $(t).append(titleTemplate()) });
-  render();
-  fetchPRList();
+
+  // Clear local PR cache
+  var prKeys = _.filter(_.keys(localStorage), function(k) {
+    return k.indexOf(PR_SUMMARY_PREFIX) == 0
+  });
+  _.each(prKeys, function(k) { localStorage.removeItem(k); });
+
+  if (localStorage[GITHUB_API_TOKEN]) {
+    $("#github-token-input").val(localStorage[GITHUB_API_TOKEN])
+    fetchPRList();
+  } else {
+    $("#github-token-input").change(function(event) {
+      localStorage[GITHUB_API_TOKEN] = $(event.target).val();
+      fetchPRList();
+    });
+  }
 });
 
 function fetchPrPage(pageNum) {
@@ -27,14 +46,21 @@ function fetchPrPage(pageNum) {
     url: "https://api.github.com/repos/apache/spark/pulls?per_page=100&page=" + pageNum,
     success: function(data, status) {
       _.each(data, function(pr) {
-        localStorage["pr_" + pr.id] = JSON.stringify(pr)
+        // Because local storage space is limited, we extract only the fields we need
+        var prShort = {};
+        prShort.updated_at = pr.updated_at;
+        prShort.number = pr.number;
+        prShort.userLogin = pr.user.login;
+        prShort.title = pr.title;
+        localStorage[PR_SUMMARY_PREFIX + pr.id] = JSON.stringify(prShort)
       });
       render();
     },
-    error: function(data) {
-      alert(data);
+    error: function(xhr, status, error) {
+      alert("Response from github: " + status + ", " + error);
     },
     beforeSend: function(xhr) {
+      var gitApiToken = localStorage[GITHUB_API_TOKEN];
       xhr.setRequestHeader("Authorization", "Basic " + btoa(gitApiToken + ":x-oauth-basic"));
     }
   });
@@ -95,7 +121,7 @@ function render() {
   _.each($("table"), function(t) { $(t).empty() });
   _.each($("table"), function(t) { $(t).append(titleTemplate()) });
 
-  var prKeys = _.filter(_.keys(localStorage), function(k) { return k.indexOf("pr_") == 0 });
+  var prKeys = _.filter(_.keys(localStorage), function(k) { return k.indexOf(PR_SUMMARY_PREFIX) == 0 });
   var prTuples = _.map(prKeys, function(k) { return [k, JSON.parse(localStorage[k])] });
 
   // Default sort based on updated date
@@ -117,3 +143,4 @@ function render() {
     $(updated).append("<span id='sorttable_sortfwdind'>&nbsp;&#9662;</span>");
   });
 };
+
