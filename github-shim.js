@@ -113,7 +113,7 @@ function addPRToTable(json) {
   else if (json.title.search(/YARN/i) >= 0) {
     $("#yarn-table").append(createRow(json));
   }
-  else if (json.title.search(/STREAMING/i) >= 0) {
+  else if (json.title.search(/STREAM/i) >= 0) {
     $("#streaming-table").append(createRow(json));
   } else {
     $("#core-table").append(createRow(json));
