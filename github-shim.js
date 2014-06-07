@@ -1,5 +1,6 @@
 var titleTemplate = _.template(
   "<tr>" +
+      "<th></th>" +
       "<th>Links</th>" +
       "<th>Title</th>" +
       "<th>User</th>" +
@@ -8,6 +9,7 @@ var titleTemplate = _.template(
 
 var rowTemplate = _.template(
   "<tr>" +
+    "<td><%= pr.number %></td>" +
     "<td><%= links %></td>" +
     "<td><%= pr.title %></td>" +
     "<td><%= pr.userLogin %></td>" +
