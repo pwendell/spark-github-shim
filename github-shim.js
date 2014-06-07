@@ -101,19 +101,23 @@ function createRow(pr) {
 };
 
 function addPRToTable(json) {
-  if (json.title.search(/SQL/i) >= 0) {
+  var title = json.title;
+  if (title.search(/SQL/i) >= 0) {
     $("#sql-table").append(createRow(json));
   }
-  else if (json.title.search(/MLLIB/i) >= 0) {
+  else if (title.search(/MLLIB/i) >= 0) {
     $("#mllib-table").append(createRow(json));
   }
-  else if (json.title.search(/GRAPHX/i) >= 0) {
+  else if (title.search(/GRAPHX/i) >= 0) {
     $("#graphx-table").append(createRow(json));
   }
-  else if (json.title.search(/YARN/i) >= 0) {
+  else if (title.search(/PYTHON/i) >= 0 || title.search(/PYSPARK/i) >= 0) {
+    $("#pyspark-table").append(createRow(json));
+  }
+  else if (title.search(/YARN/i) >= 0) {
     $("#yarn-table").append(createRow(json));
   }
-  else if (json.title.search(/STREAM/i) >= 0) {
+  else if (title.search(/STREAM/i) >= 0) {
     $("#streaming-table").append(createRow(json));
   } else {
     $("#core-table").append(createRow(json));
