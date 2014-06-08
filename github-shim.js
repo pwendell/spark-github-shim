@@ -30,6 +30,23 @@ var PR_ISSUE_COMMENTS_PREFIX = "pr_issue_comments_"
 var JIRA_DETAIL_PREFIX = "jira_detail_"
 var GITHUB_API_TOKEN = "github_token"
 
+
+// To allow for backwards-incompatible changes in the local storage format, we have a version
+// number for local storage. If the user is behind the needed version, we simply blow away
+// all local storage except for the github token.
+var APP_VERSION_KEY = "app_version"
+var APP_VERSION_VALUE = "1"
+
+if (!localStorage[APP_VERSION_KEY] || localStorage[APP_VERSION_KEY] != APP_VERSION_VALUE) {
+  _.map(_.keys(localStorage), function(k) {
+    if (k != GITHUB_API_TOKEN) {
+      localStorage.removeItem(k);
+    }
+  });
+  localStorage[APP_VERSION_KEY] = APP_VERSION_VALUE
+}
+
+
 $(document).ready(function() {
   // Prep tables
   _.each($("table"), function(t) { $(t).append(titleTemplate()) });
@@ -214,7 +231,7 @@ function render() {
     var prNum = pr_Json.number;
 
     // Merge the two different comment streams
-    var emptyComments = {commenters: [], lastCommenter: "Unknown",
+    var emptyComments = {commenters: [], lastCommenter: "",
       lastCommentTime: "2000-06-06T00:00:00Z"}
 
     var prComments = emptyComments
