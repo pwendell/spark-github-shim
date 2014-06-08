@@ -3,7 +3,9 @@ var titleTemplate = _.template(
       "<th></th>" +
       "<th>Links</th>" +
       "<th>Title</th>" +
-      "<th>User</th>" +
+      "<th>Creator</th>" +
+      "<th>Last comment</th>" +
+      "<th>Reviewers</th>" +
       "<th>Updated</th>" +
   "</tr>");
 
@@ -13,12 +15,15 @@ var rowTemplate = _.template(
     "<td><%= links %></td>" +
     "<td><%= pr.title %></td>" +
     "<td><%= pr.userLogin %></td>" +
+    "<td><%= comments.lastCommenter %></td>" +
+    "<td><% for (i in comments.commenters) { %> <%= comments.commenters[i] %> <% } %></td>" +
     "<td sorttable_customkey='<%= updated_stamp %>'><%= updated_str %></td>" +
+    "<td></td>" +
   "</tr>");
 
 // Key prefixes used in local storage
 var PR_SUMMARY_PREFIX = "pr_summary_"
-var PR_DETAIL_PREFIX = "pr_detail_"
+var PR_COMMENTS_PREFIX = "pr_comments_"
 var JIRA_DETAIL_PREFIX = "jira_detail_"
 var GITHUB_API_TOKEN = "github_token"
 
@@ -43,7 +48,17 @@ $(document).ready(function() {
   }
 });
 
-function fetchPrPage(pageNum) {
+// API calls
+var doAuth = function(xhr) {
+  var gitApiToken = localStorage[GITHUB_API_TOKEN];
+  xhr.setRequestHeader("Authorization", "Basic " + btoa(gitApiToken + ":x-oauth-basic"));
+};
+
+var alertError = function(xhr, status, error) {
+  alert("Response from github: " + status + ", " + error);
+};
+
+function fetchPrIndex(pageNum) {
   $.ajax({
     url: "https://api.github.com/repos/apache/spark/pulls?per_page=100&page=" + pageNum,
     success: function(data, status) {
@@ -54,29 +69,62 @@ function fetchPrPage(pageNum) {
         prShort.number = pr.number;
         prShort.userLogin = pr.user.login;
         prShort.title = pr.title;
-        localStorage[PR_SUMMARY_PREFIX + pr.id] = JSON.stringify(prShort)
+        localStorage[PR_SUMMARY_PREFIX + pr.number] = JSON.stringify(prShort)
+
+        // This initiates a request for every PR found, meaning 100+ requests will be sent out
+        // in a short amount of time. Most of these will return 304 (not modified) but it's still
+        // a large number of requests. A nicer way might be to only fire a request here if we don't
+        // already have a stale version of the comment cache for the PR and otherwise, put the
+        // PR in a queue for later servicing. Then we could pull PR's from that queue in a rate
+        // limited fashion (possibly by taking the newer ones first).
+        fetchComments(pr.number);
       });
       render();
     },
-    error: function(xhr, status, error) {
-      alert("Response from github: " + status + ", " + error);
-    },
-    beforeSend: function(xhr) {
-      var gitApiToken = localStorage[GITHUB_API_TOKEN];
-      xhr.setRequestHeader("Authorization", "Basic " + btoa(gitApiToken + ":x-oauth-basic"));
-    }
+    error: alertError,
+    beforeSend: doAuth
   });
 }
 
+function fetchComments(prNum) {
+  var commentsKey = PR_COMMENTS_PREFIX + prNum;
+  var headers = {};
+  if (localStorage[commentsKey]) {
+    headers["If-None-Match"] = JSON.parse(localStorage[commentsKey]).httpETag;
+  }
+  $.ajax({
+    url: "https://api.github.com/repos/apache/spark/pulls/" + prNum + "/comments",
+    headers: headers,
+    success: function(data, status, xhr) {
+      if (xhr.status == 304) return;  // Not modified
+      if (data.length == 0) return;   // No comments
+
+      var commentNames = _.map(data, function(comment) {
+        return comment.user.login
+      });
+      var distinctNames = _.intersection(commentNames, commentNames);
+      var lastCommenter = _.last(data).user.login
+      var httpETag = xhr.getResponseHeader("ETag");
+      var commentData = {commenters: distinctNames, lastCommenter: lastCommenter,
+        httpETag: httpETag};
+      localStorage[commentsKey] = JSON.stringify(commentData);
+      render();
+    },
+    error: alertError,
+    beforeSend: doAuth
+  });
+}
+
+
 // Kick off an asynchronous fetch of PR data from github.
 function fetchPRList() {
-  fetchPrPage(1);
-  fetchPrPage(2);
-  fetchPrPage(3);
-  fetchPrPage(4);
+  fetchPrIndex(1);
+  fetchPrIndex(2);
+  fetchPrIndex(3);
+  fetchPrIndex(4);
 };
 
-function createRow(pr) {
+function createRow(prJson, commentsJson) {
   var linksTemplate = _.template(
     "[<a href='<%= github_pr_url %>/<%= pr_num %>'>pr</a>]" +
     "[<a href='<%= github_pr_url %>/<%= pr_num %>/files'>files</a>]" +
@@ -85,45 +133,36 @@ function createRow(pr) {
     "<% } %>");
 
 
-  var jiraRegex = pr.title.match(/SPARK-\d+/);
+  var jiraRegex = prJson.title.match(/SPARK-\d+/);
   var jiraId = jiraRegex == null ? null : jiraRegex[0];
 
   var links = linksTemplate({
     github_pr_url: "https://github.com/apache/spark/pull",
     jira_url: "https://issues.apache.org/jira/browse",
-    pr_num: pr.number,
+    pr_num: prJson.number,
     jira_id: jiraId});
 
 
   return rowTemplate({
-    "pr": pr,
-    updated_str: $.timeago(new Date(pr.updated_at)),
-    updated_stamp: new Date(pr.updated_at).getTime(),
+    "pr": prJson,
+    "comments": commentsJson,
+    updated_str: $.timeago(new Date(prJson.updated_at)),
+    updated_stamp: new Date(prJson.updated_at).getTime(),
     links: links});
 };
 
-function addPRToTable(json) {
-  var title = json.title;
-  if (title.search(/SQL/i) >= 0) {
-    $("#sql-table").append(createRow(json));
-  }
-  else if (title.search(/MLLIB/i) >= 0) {
-    $("#mllib-table").append(createRow(json));
-  }
-  else if (title.search(/GRAPHX/i) >= 0) {
-    $("#graphx-table").append(createRow(json));
-  }
+function addPRToTable(prJson, commentJson) {
+  var title = prJson.title;
+  var destinationTable = $("#core-table");
+  if (title.search(/SQL/i) >= 0) { destinationTable = $("#sql-table"); }
+  else if (title.search(/MLLIB/i) >= 0) { destinationTable = $("#mllib-table"); }
+  else if (title.search(/GRAPHX/i) >= 0) { destinationTable = $("#graphx-table"); }
+  else if (title.search(/YARN/i) >= 0) { destinationTable = $("#yarn-table") }
+  else if (title.search(/STREAM/i) >= 0) { destinationTable = $("#streaming-table") }
   else if (title.search(/PYTHON/i) >= 0 || title.search(/PYSPARK/i) >= 0) {
-    $("#pyspark-table").append(createRow(json));
+    destinationTable = $("#pyspark-table")
   }
-  else if (title.search(/YARN/i) >= 0) {
-    $("#yarn-table").append(createRow(json));
-  }
-  else if (title.search(/STREAM/i) >= 0) {
-    $("#streaming-table").append(createRow(json));
-  } else {
-    $("#core-table").append(createRow(json));
-  }
+  $(destinationTable).append(createRow(prJson, commentJson));
 };
 
 // Re-render the list of fetched PR's. Idempotent.
@@ -142,7 +181,18 @@ function render() {
   }).reverse();
 
   _.each(prTuples, function (tuple) {
-    addPRToTable(tuple[1]);
+    var pr_Json = tuple[1];
+    var prNum = pr_Json.number;
+    if (prNum == "956") {
+      var x = 10;
+    }
+
+    var commentsJson = {};
+    var commentsKey = PR_COMMENTS_PREFIX + prNum;
+    if (localStorage[commentsKey]) {
+      commentsJson = JSON.parse(localStorage[commentsKey])
+    }
+    addPRToTable(pr_Json, commentsJson);
   });
 
   _.each($("table"), function(t) {
