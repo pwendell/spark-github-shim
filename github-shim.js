@@ -21,6 +21,8 @@ var rowTemplate = _.template(
     "<td></td>" +
   "</tr>");
 
+var outstandingCommentRequests = 0;
+
 // Key prefixes used in local storage
 var PR_SUMMARY_PREFIX = "pr_summary_"
 var PR_CODE_COMMENTS_PREFIX = "pr_code_comments_"
@@ -81,7 +83,7 @@ function fetchPrIndex(pageNum) {
         fetchCodeComments(pr.number);
         fetchIssueComments(pr.number);
       });
-      render();
+      render()
     },
     error: alertError,
     beforeSend: doAuth
@@ -97,6 +99,7 @@ function fetchIssueComments(prNum) {
 }
 
 function fetchComments(prNum, pullsOrIssues, commentsKey) {
+  outstandingCommentRequests = outstandingCommentRequests + 1;
   var headers = {};
   if (localStorage[commentsKey]) {
     headers["If-None-Match"] = JSON.parse(localStorage[commentsKey]).httpETag;
@@ -105,8 +108,21 @@ function fetchComments(prNum, pullsOrIssues, commentsKey) {
     url: "https://api.github.com/repos/apache/spark/" + pullsOrIssues + "/" + prNum +
       "/comments?per_page=100",
     headers: headers,
+    complete: function() {
+      outstandingCommentRequests = outstandingCommentRequests - 1;
+    },
     success: function(data, status, xhr) {
-      if (xhr.status == 304) return;  // Not modified
+      function maybeRender() {
+        // Avoid re-rendering frequently when we have a burst of requests
+        if (outstandingCommentRequests % 20 == 0) render();
+      }
+
+      // Not modified
+      if (xhr.status == 304) {
+        maybeRender();
+        return;
+      }
+
       // drop Jenkins comments
       data = _.filter(data, function(comment) { return comment.user.login != "AmplabJenkins"; });
       if (data.length == 0) return;   // No comments
@@ -121,7 +137,7 @@ function fetchComments(prNum, pullsOrIssues, commentsKey) {
       var commentData = {commenters: distinctNames, lastCommenter: lastCommenter,
         lastCommentTime: lastCommentTime, httpETag: httpETag};
       localStorage[commentsKey] = JSON.stringify(commentData);
-      render();
+      maybeRender();
     },
     error: alertError,
     beforeSend: doAuth
