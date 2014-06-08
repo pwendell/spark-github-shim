@@ -23,7 +23,8 @@ var rowTemplate = _.template(
 
 // Key prefixes used in local storage
 var PR_SUMMARY_PREFIX = "pr_summary_"
-var PR_COMMENTS_PREFIX = "pr_comments_"
+var PR_CODE_COMMENTS_PREFIX = "pr_code_comments_"
+var PR_ISSUE_COMMENTS_PREFIX = "pr_issue_comments_"
 var JIRA_DETAIL_PREFIX = "jira_detail_"
 var GITHUB_API_TOKEN = "github_token"
 
@@ -77,7 +78,8 @@ function fetchPrIndex(pageNum) {
         // already have a stale version of the comment cache for the PR and otherwise, put the
         // PR in a queue for later servicing. Then we could pull PR's from that queue in a rate
         // limited fashion (possibly by taking the newer ones first).
-        fetchComments(pr.number);
+        fetchCodeComments(pr.number);
+        fetchIssueComments(pr.number);
       });
       render();
     },
@@ -86,17 +88,27 @@ function fetchPrIndex(pageNum) {
   });
 }
 
-function fetchComments(prNum) {
-  var commentsKey = PR_COMMENTS_PREFIX + prNum;
+function fetchCodeComments(prNum) {
+  fetchComments(prNum, "pulls", PR_CODE_COMMENTS_PREFIX + prNum)
+}
+
+function fetchIssueComments(prNum) {
+  fetchComments(prNum, "issues", PR_ISSUE_COMMENTS_PREFIX + prNum)
+}
+
+function fetchComments(prNum, pullsOrIssues, commentsKey) {
   var headers = {};
   if (localStorage[commentsKey]) {
     headers["If-None-Match"] = JSON.parse(localStorage[commentsKey]).httpETag;
   }
   $.ajax({
-    url: "https://api.github.com/repos/apache/spark/pulls/" + prNum + "/comments?per_page=100",
+    url: "https://api.github.com/repos/apache/spark/" + pullsOrIssues + "/" + prNum +
+      "/comments?per_page=100",
     headers: headers,
     success: function(data, status, xhr) {
       if (xhr.status == 304) return;  // Not modified
+      // drop Jenkins comments
+      data = _.filter(data, function(comment) { return comment.user.login != "AmplabJenkins"; });
       if (data.length == 0) return;   // No comments
 
       var commentNames = _.map(data, function(comment) {
@@ -104,9 +116,10 @@ function fetchComments(prNum) {
       });
       var distinctNames = _.intersection(commentNames, commentNames);
       var lastCommenter = _.last(data).user.login
+      var lastCommentTime = _.last(data).created_at
       var httpETag = xhr.getResponseHeader("ETag");
       var commentData = {commenters: distinctNames, lastCommenter: lastCommenter,
-        httpETag: httpETag};
+        lastCommentTime: lastCommentTime, httpETag: httpETag};
       localStorage[commentsKey] = JSON.stringify(commentData);
       render();
     },
@@ -183,16 +196,30 @@ function render() {
   _.each(prTuples, function (tuple) {
     var pr_Json = tuple[1];
     var prNum = pr_Json.number;
-    if (prNum == "956") {
-      var x = 10;
+
+    // Merge the two different comment streams
+    var emptyComments = {commenters: [], lastCommenter: "Unknown",
+      lastCommentTime: "2000-06-06T00:00:00Z"}
+
+    var prComments = emptyComments
+    var issueComments = emptyComments
+    if (localStorage[PR_CODE_COMMENTS_PREFIX + prNum]) {
+      prComments = JSON.parse(localStorage[PR_CODE_COMMENTS_PREFIX + prNum])
+    }
+    if (localStorage[PR_ISSUE_COMMENTS_PREFIX + prNum]) {
+      issueComments = JSON.parse(localStorage[PR_ISSUE_COMMENTS_PREFIX + prNum])
     }
 
-    var commentsJson = {};
-    var commentsKey = PR_COMMENTS_PREFIX + prNum;
-    if (localStorage[commentsKey]) {
-      commentsJson = JSON.parse(localStorage[commentsKey])
+    var mergedComments = {}
+    mergedComments.commenters = _.union(prComments.commenters, issueComments.commenters)
+
+    if (prComments.lastCommentTime > issueComments.lastCommentTime) {
+      mergedComments.lastCommenter = prComments.lastCommenter
+    } else {
+      mergedComments.lastCommenter = issueComments.lastCommenter
     }
-    addPRToTable(pr_Json, commentsJson);
+
+    addPRToTable(pr_Json, mergedComments);
   });
 
   _.each($("table"), function(t) {
