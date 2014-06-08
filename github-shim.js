@@ -93,7 +93,7 @@ function fetchComments(prNum) {
     headers["If-None-Match"] = JSON.parse(localStorage[commentsKey]).httpETag;
   }
   $.ajax({
-    url: "https://api.github.com/repos/apache/spark/pulls/" + prNum + "/comments",
+    url: "https://api.github.com/repos/apache/spark/pulls/" + prNum + "/comments?per_page=100",
     headers: headers,
     success: function(data, status, xhr) {
       if (xhr.status == 304) return;  // Not modified
