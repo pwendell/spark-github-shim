@@ -58,7 +58,7 @@ $(document).ready(function() {
   _.each(prKeys, function(k) { localStorage.removeItem(k); });
 
   $("#github-token-input").change(function(event) {
-    localStorage[GITHUB_API_TOKEN] = $(event.target).val();
+    localStorage[GITHUB_API_TOKEN] = $(event.target).val().replace(/ /g, "");
     fetchPRList();
   });
 
