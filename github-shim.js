@@ -141,7 +141,9 @@ function fetchComments(prNum, pullsOrIssues, commentsKey) {
       }
 
       // drop Jenkins comments
-      data = _.filter(data, function(comment) { return comment.user.login != "AmplabJenkins"; });
+      data = _.filter(data, function(comment) {
+        return (comment.user.login != "AmplabJenkins") && (comment.user.login != "SparkQA");
+      });
       if (data.length == 0) return;   // No comments
 
       var commentNames = _.map(data, function(comment) {
