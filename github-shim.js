@@ -204,11 +204,15 @@ function addPRToTable(prJson, commentJson) {
   var destinationTable = $("#core-table");
   if (title.search(/SQL/i) >= 0) { destinationTable = $("#sql-table"); }
   else if (title.search(/MLLIB/i) >= 0) { destinationTable = $("#mllib-table"); }
-  else if (title.search(/GRAPHX/i) >= 0) { destinationTable = $("#graphx-table"); }
+  else if (title.search(/GRAPHX/i) >= 0 || title.search(/PREGEL/i) >= 0) {
+    destinationTable = $("#graphx-table");
+  }
   else if (title.search(/YARN/i) >= 0) { destinationTable = $("#yarn-table") }
   else if (title.search(/STREAM/i) >= 0 || title.search(/FLUME/i) >= 0 || 
-    title.search(/KAFKA/i) >= 0 || title.search(/TWITTER/i) >=0 || 
-    title.search(/ZEROMQ/i) >= 0) { destinationTable = $("#streaming-table") }
+      title.search(/KAFKA/i) >= 0 || title.search(/TWITTER/i) >=0 || 
+      title.search(/ZEROMQ/i) >= 0) {
+    destinationTable = $("#streaming-table")
+  }
   else if (title.search(/PYTHON/i) >= 0 || title.search(/PYSPARK/i) >= 0) {
     destinationTable = $("#pyspark-table")
   }
