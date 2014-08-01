@@ -208,6 +208,7 @@ function addPRToTable(prJson, commentJson) {
     destinationTable = $("#graphx-table");
   }
   else if (title.search(/YARN/i) >= 0) { destinationTable = $("#yarn-table") }
+  else if (title.search(/MESOS/i) >= 0) { destinationTable = $("#mesos-table") }
   else if (title.search(/STREAM/i) >= 0 || title.search(/FLUME/i) >= 0 || 
       title.search(/KAFKA/i) >= 0 || title.search(/TWITTER/i) >=0 || 
       title.search(/ZEROMQ/i) >= 0) {
